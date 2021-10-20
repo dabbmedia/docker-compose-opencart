@@ -1,0 +1,100 @@
+##
+# usage
+# docker-compose build
+# docker-compose up -d
+# docker-compose down
+# docker-compose logs -f
+## remove persistent db volume (to run the install script again)
+# docker volume rm opencart_db_data_opencart30
+## also delete OpenCart cahce files
+## 
+version: '3'
+
+networks:
+  opencart30-network:
+    driver: bridge
+
+services:
+  opencart30-db: # host name for db connection
+    image: mysql:5.7
+    container_name: opencart30_mysql
+    command: --default-authentication-plugin=mysql_native_password
+    volumes:
+      - db_data_opencart30:/var/lib/mysql
+      # - ./www/data:/var/www/html/data
+    restart: always
+    ports:
+      - "3600:3600"
+    networks:
+      - opencart30-network
+    environment:
+      MYSQL_ROOT_PASSWORD: opencart30
+      MYSQL_DATABASE: opencart30
+      MYSQL_USER: opencart30
+      MYSQL_PASSWORD: opencart30
+
+  opencart30-php:
+    container_name: opencart30_php7.4
+    build: ./docker-build/php/
+    volumes:
+      - ./upload:/var/www/html/www:rw
+      - ./storage:/var/www/html/storage:rw
+    ports:
+      - "9000:9000"
+    networks:
+      - opencart30-network
+    links:
+      - opencart30-db
+
+  opencart30-nginx:
+    links:
+      - opencart30-php
+    image: nginx:1.15.9
+    container_name: opencart30_nginx
+    volumes:
+      - ./docker-build/nginx/opencart30.conf:/etc/nginx/conf.d/opencart30.conf
+      - ./upload:/var/www/html/www:rw
+      - ./storage:/var/www/html/storage:rw
+    ports:
+      - "80:80"
+    networks:
+      - opencart30-network
+    environment:
+      - FASTCGI_PASS_HOST=opencart30-php
+      - NGINX_HOST=opencart30.dev
+      - NGINX_PORT=80
+    command: /bin/bash -c "envsubst '$$NGINX_HOST' < /etc/nginx/conf.d/opencart30.conf > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"
+    restart: always
+
+  # opencart30-php:
+  #   # image: php:7.3.3-fpm-alpine3.9
+  #   container_name: opencart30_php7.4
+  #   # container_name: opencart30_php7.3.3_apache_stretch
+  #   build: ./docker-build/php/
+  #   volumes:
+  #     - ./upload:/var/www/html:rw
+  #     # - ./upload:/usr/local/apache2/htdocs
+  #   ports:
+  #     - "9000:9000"
+  #   networks:
+  #     - opencart30-network
+  #   links:
+  #     - opencart30-db
+
+  # opencart30-httpd:
+  #   links:
+  #     - opencart30-php
+  #   image: httpd:2.4-alpine
+  #   container_name: opencart30_httpd2.4-alpine
+  #   volumes:
+  #     - ./docker-build/httpd/httpd.conf:/usr/local/apache2/conf/httpd.conf
+  #     # - ./upload:/var/www/html:rw
+  #     - ./upload:/usr/local/apache2/htdocs
+  #   ports:
+  #     - "80:80"
+  #     # - "443:443"
+  #   networks:
+  #     - opencart30-network
+  #   restart: always
+volumes:
+    db_data_opencart30:
